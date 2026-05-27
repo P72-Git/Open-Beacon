@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - photoUrl: string (optional)
+    //   - role: string (required, immutable for non-admins)
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: users/{userId}/savedPlaces
+    // Document ID: {placeId}
+    // Fields:
+    //   - placeId: string (required, immutable)
+    //   - name: string (required)
+    //   - address: string (required)
+    //   - category: string (required)
+    //   - savedAt: timestamp (required, immutable)
+    //
+    // Collection: users/{userId}/recentSearches
+    // Document ID: {searchId}
+    // Fields:
+    //   - query: string (required)
+    //   - searchedAt: timestamp (required, immutable)
+    //
+    // Collection: confirmations/{placeId}/reports
+    // Document ID: {reportId}
+    // Fields:
+    //   - placeId: string (required, immutable)
+    //   - userId: string (required, immutable)
+    //   - status: string (required) - enum: ['open', 'closed', 'busy', 'quiet']
+    //   - note: string (optional)
+    //   - reportedAt: timestamp (required, immutable)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "luis.rtv3@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'photoUrl', 'role', 'createdAt']) &&
+             hasRequiredFields(['uid', 'name', 'email', 'role', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             isValidOptionalString('photoUrl', 0, 500) &&
+             data.role in ['user', 'admin'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSavedPlace(data) {
+      return hasOnlyAllowedFields(['placeId', 'name', 'address', 'category', 'savedAt']) &&
+             hasRequiredFields(['placeId', 'name', 'address', 'category', 'savedAt']) &&
+             data.placeId is string && data.placeId.size() > 0 && data.placeId.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.address is string && data.address.size() > 0 && data.address.size() < 500 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
+             data.savedAt is timestamp;
+    }
+
+    function isValidRecentSearch(data) {
+      return hasOnlyAllowedFields(['query', 'searchedAt']) &&
+             hasRequiredFields(['query', 'searchedAt']) &&
+             data.query is string && data.query.size() > 0 && data.query.size() < 200 &&
+             data.searchedAt is timestamp;
+    }
+
+    function isValidConfirmation(data) {
+      return hasOnlyAllowedFields(['placeId', 'userId', 'status', 'note', 'reportedAt']) &&
+             hasRequiredFields(['placeId', 'userId', 'status', 'reportedAt']) &&
+             data.placeId is string && data.placeId.size() > 0 && data.placeId.size() < 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.status in ['open', 'closed', 'busy', 'quiet'] &&
+             isValidOptionalString('note', 0, 500) &&
+             data.reportedAt is timestamp;
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
+                    request.resource.data.uid == userId &&
+                    (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
+                    request.resource.data.uid == resource.data.uid &&
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+
+      match /savedPlaces/{placeId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidSavedPlace(request.resource.data) &&
+                      request.resource.data.placeId == placeId;
+        allow update: if isOwner(userId) && isValidSavedPlace(request.resource.data) &&
+                      request.resource.data.placeId == resource.data.placeId &&
+                      request.resource.data.savedAt == resource.data.savedAt;
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /recentSearches/{searchId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidRecentSearch(request.resource.data);
+        allow update: if isOwner(userId) && isValidRecentSearch(request.resource.data) &&
+                      request.resource.data.searchedAt == resource.data.searchedAt;
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /confirmations/{placeId}/reports/{reportId} {
+      allow read: if isAuthenticated(); // Anyone authenticated can read confirmations
+      allow create: if isAuthenticated() && isValidConfirmation(request.resource.data) &&
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.placeId == placeId;
+      allow update: if isAuthenticated() && isValidConfirmation(request.resource.data) &&
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.placeId == resource.data.placeId &&
+                    request.resource.data.reportedAt == resource.data.reportedAt;
+      allow delete: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+    }
+  }
+}

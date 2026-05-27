@@ -1,0 +1,11 @@
+{
+  "name": "Open Beacon",
+  "description": "GeoDev & Spatial Data engine. A real-time local search and mapping platform focused on geographic workflows, spatial analysis, and future integration with PostGIS.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

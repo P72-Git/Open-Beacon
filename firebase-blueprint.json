@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "name": { "type": "string", "description": "User's display name" },
+        "email": { "type": "string", "format": "email", "description": "User's email" },
+        "photoUrl": { "type": "string", "description": "User's profile photo URL" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User's role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["uid", "name", "email", "role", "createdAt"]
+    },
+    "SavedPlace": {
+      "title": "Saved Place",
+      "description": "A place saved by a user.",
+      "type": "object",
+      "properties": {
+        "placeId": { "type": "string", "description": "Google Maps Place ID" },
+        "name": { "type": "string", "description": "Name of the place" },
+        "address": { "type": "string", "description": "Address of the place" },
+        "category": { "type": "string", "description": "Category of the place" },
+        "savedAt": { "type": "string", "format": "date-time", "description": "When it was saved" }
+      },
+      "required": ["placeId", "name", "address", "category", "savedAt"]
+    },
+    "Confirmation": {
+      "title": "Community Confirmation",
+      "description": "A user report on a place's status.",
+      "type": "object",
+      "properties": {
+        "placeId": { "type": "string", "description": "Google Maps Place ID" },
+        "userId": { "type": "string", "description": "ID of the user who reported" },
+        "status": { "type": "string", "enum": ["open", "closed", "busy", "quiet"], "description": "Reported status" },
+        "note": { "type": "string", "description": "Optional note" },
+        "reportedAt": { "type": "string", "format": "date-time", "description": "When it was reported" }
+      },
+      "required": ["placeId", "userId", "status", "reportedAt"]
+    },
+    "RecentSearch": {
+      "title": "Recent Search",
+      "description": "A recent search query by a user.",
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "The search query" },
+        "searchedAt": { "type": "string", "format": "date-time", "description": "When it was searched" }
+      },
+      "required": ["query", "searchedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles."
+    },
+    "/users/{userId}/savedPlaces/{placeId}": {
+      "schema": { "$ref": "#/entities/SavedPlace" },
+      "description": "Places saved by the user."
+    },
+    "/users/{userId}/recentSearches/{searchId}": {
+      "schema": { "$ref": "#/entities/RecentSearch" },
+      "description": "Recent searches by the user."
+    },
+    "/confirmations/{placeId}/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Confirmation" },
+      "description": "Community confirmations for places."
+    }
+  }
+}
